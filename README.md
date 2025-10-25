@@ -1,2 +1,3 @@
-# GeoCausal-SHAP
-Dataset and algorithms used for my experiments in the 5th paragraph of my master thesis: GeoCausal SHAP - A Geovisual Analytics Framework for Explaining AI Combining SHAP and Causal Discovery 
+Munich_Mean Temperature.csv is from Europe Climate dataset collected from Munich Airport, is the European Climate Assessment & Dataset (ECA&D) for 5.3.1
+Newdata_2020.csv is the Qinghai-Tibet Plateau Urban Region Frozen Ground Dataset for 5.2.1
+
