@@ -3,8 +3,6 @@ Dataset and algorithms used for my experiments of my master thesis related to SH
 
 When testing GeoCausal SHAP, using the dataset I provide in the dataset, and altogether four .py files (GeoCausal SHAP.py, Causal_discovery.py, shap_explainer.py, utils.py) at the same time, datapreprocessing methods for datasets are all in the GeoCausal SHAP.py, you can choose different datasets for testing in the load dataset part. Changing different causal discovery mode, shap calculation mode, and predition model in the config as well.
 
-For other small experiments testing for 3.4.1 feature independence assumption, 3.4.2 masked causes, you can run the .py file directly. For experiments using GeoSHAP, you can run the .py file I provide and changing dataset as you like.
-
 Environment file is also provided.
 
 GeoCausal SHAP's framework:
@@ -36,3 +34,7 @@ Dataset：
 *Here is the dataset collected from web. The preprocessing procedures and to choose which of variables are included in the GeoCausal SHAP.py.
 
 *data_100m_withlocation.csv(Munich Population Distribution Dataset) is too large that I can just upload a compressed one.
+
+Other codes for small experiments of 3.4.1 and 3.4.2, or experiments on GeoSHAP:
+
+Include codes for experiments on feature independence assumption(3.4.1), masked causes(3.4.2), and locational variable absorption effect(3.4.3), also for experiments on GeoShapley(5.1.1, 5.1.2)
