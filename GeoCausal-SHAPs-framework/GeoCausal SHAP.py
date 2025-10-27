@@ -9,8 +9,13 @@ from Shap_explainer import GeoCausalSHAP
 from utils import train_model
 import time
 from sklearn.model_selection import train_test_split
+from matplotlib.colors import TwoSlopeNorm
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
+# To test on the dataset given, dear users, you need to change:
+# Settings in config. For the causal discovery algorithms, for mode you want to use, for prediction model you want to apply.
+# locational variables in the eighth part, because in different dataset, lcoational variables have different names.
 
 # === 1. Load dataset from CSV (seattle housing price dataset)===
 """
@@ -148,8 +153,14 @@ SEED = 42
 np.random.seed(SEED)
 
 # ==== Config ====
-MODEL_TYPE = "random_forest"  # 'xgboost' | 'random_forest' | 'mlp'
-DAG_METHOD = "pc"  # 'notears' | 'pc' | 'ges'
+MODEL_TYPE = "xgboost"  # 'xgboost' | 'random_forest' | 'mlp'
+# seattle housing price dataset: mlp
+# melbourne housing price dataset: xgboost
+# Qinghai-Tibet Plateau Urban Region Frozen Ground Dataset: mlp
+# Munich Population Distribution Dataset: mlp
+# European Climate Assessment & Dataset (ECA&D): mlp
+# Beijing Multi-site Air Quality Data: mlp
+DAG_METHOD = "notears"  # 'notears' | 'pc' | 'ges'
 SHAP_MODE = "mode 1"  # 'mode 1' | 'mode 2'
 BACKGROUND_N = 30  # background set size
 TEST_SIZE = 0.2  # for reporting train/test R^2
@@ -159,23 +170,40 @@ start = time.perf_counter()
 # === 1. Load Dataset===
 
 # change the address as your setting, dear users.
-data = pd.read_csv(
-    "D:/TUM Master GuG/SS2025/Master's thesis - Geodesy and Geoinformation/dataset/seattle_sample_all.csv")
+df = pd.read_csv(
+    "D:/TUM Master GuG/SS2025/Master's thesis - Geodesy and Geoinformation/dataset/melb_data.csv")
 
-# Separate features and target
-y = data["log_price"].values
-X = data.drop(columns=["log_price"])
+df = df.dropna(subset=["Car", "BuildingArea", "YearBuilt"])
+
+df["YearBuilt"] = 2025 - df["YearBuilt"]
+
+# Construct feature X and target variable Y
+X = df[[
+    "Lattitude",  # Spelling mistake from dataset, not from author of the thesis
+    "Longtitude",
+    "Rooms",
+    "Distance",
+    "Bathroom",
+    "Car",
+    "BuildingArea",
+    "YearBuilt"
+]]
+
+y = df["Price"].values
+
 feature_names = X.columns.tolist()
+
 print(feature_names)
 n, p = X.shape
 print(n)
 
-# 2) External split for reporting R^2
+# ==== 2. Getting prediction result ====
+# 1) External split for reporting R^2
 X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=TEST_SIZE, random_state=SEED)
 print("split finish!")
 print("wait for prediction")
 
-# 3) Train using your updated train_model WITH the external split
+# 2) Train using your updated train_model WITH the external split
 model, metrics = train_model(
     X, y,
     model_type=MODEL_TYPE,
@@ -219,21 +247,81 @@ elapsed = time.perf_counter() - start
 print(f"\nTotal runtime: {elapsed:.2f} s")
 
 # === 8. Visualize SHAP spatial distribution for one feature ===
+# === Step 1: Select non-location features ===
+#  seattle housing price dataset: ["UTM_X", "UTM_Y"]
+#  melbourne housing price dataset: ["Longtitude", "Lattitude"]
+#  Qinghai-Tibet Plateau Urban Region Frozen Ground Dataset: ["long", "lat"]
+#  Munich Population Distribution Dataset: ["Long", "Lat"]
+loc_fields = ["Longtitude", "Lattitude"]
+plot_features = [f for f in feature_names if f not in loc_fields]
 
-for fname in feature_names:
-    if fname in ["Long", "Lat"]:
-        continue
+# === Step 2: Flatten all SHAP values to determine global scale ===
+all_vals = np.concatenate([phi_matrix[:, feature_names.index(f)] for f in plot_features])
+max_abs_val = np.nanmax(np.abs(all_vals))
+
+use_log = max_abs_val >= 100
+
+# === Step 3: Define normalization and color scale ===
+if not use_log:
+    # --- Linear scale ---
+    q1 = np.nanquantile(all_vals, 0.01)
+    q99 = np.nanquantile(all_vals, 0.99)
+    vmax_abs = max(abs(q1), abs(q99))
+    norm = TwoSlopeNorm(vmin=-vmax_abs, vcenter=0.0, vmax=vmax_abs)
+    cmap = "bwr"
+    use_log_label = False
+else:
+    # --- Log scale ---
+    def signed_log10(x):
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.sign(x) * np.log10(np.abs(x) + 1e-6)
+
+    # Dynamic vmax: round up to nearest power of 10
+    raw_max = np.nanmax(np.abs(all_vals))
+    V_log = int(np.ceil(np.log10(raw_max)))  # e.g., log10(345) = 2.53 → ceil → 3
+
+    norm = TwoSlopeNorm(vmin=-V_log, vcenter=0.0, vmax=V_log)
+    cmap = "bwr"
+    use_log_label = True
+
+# === Step 4: Plot ===
+for fname in plot_features:
     idx = feature_names.index(fname)
     shap_vals = phi_matrix[:, idx]
 
+    if use_log:
+        cvals = signed_log10(shap_vals)
+    else:
+        cvals = shap_vals
+
     plt.figure(figsize=(10, 8))
-    sc = plt.scatter(X["Long"], X["Lat"], c=shap_vals, cmap='coolwarm', s=20, edgecolor='k', alpha=0.5)
+    sc = plt.scatter(
+        #  seattle housing price dataset: ["UTM_X", "UTM_Y"]
+        #  melbourne housing price dataset: ["Longtitude", "Lattitude"]
+        #  Qinghai-Tibet Plateau Urban Region Frozen Ground Dataset: ["long", "lat"]
+        #  Munich Population Distribution Dataset: ["Long", "Lat"]
+        X["Longtitude"], X["Lattitude"],
+        c=cvals,
+        cmap=cmap,
+        norm=norm,
+        s=20,
+        edgecolor="k",
+        alpha=0.5
+    )
     plt.xlabel("Longitude")
     plt.ylabel("Latitude")
-    plt.title(f"Spatial Distribution of SHAP Values for '{fname}'")
+    plt.title(f"{fname}")
+
     cbar = plt.colorbar(sc)
-    cbar.set_label("SHAP Value")
-    plt.grid(True)
+    if use_log_label:
+        # Show tick labels like -1e2, -1e1, 0, +1e1, +1e2
+        ticks = list(range(-V_log, V_log + 1))
+        labels = [f"-1e{abs(t)}" if t < 0 else ("0" if t == 0 else f"1e{t}") for t in ticks]
+        cbar.set_ticks(ticks)
+        cbar.set_ticklabels(labels)
+        cbar.set_label("SHAP Value (log10 scale)")
+    else:
+        cbar.set_label("SHAP Value")
+
     plt.tight_layout()
     plt.show()
-
